@@ -1,0 +1,66 @@
+service: go-challenge
+
+custom:
+  devicesTableName: ${self:service}-devices
+  devicesTableArn:
+    Fn::Join:
+    - ":"
+    - - arn
+      - aws
+      - dynamodb
+      - Ref: AWS::Region
+      - Ref: AWS::AccountId
+      - table/${self:custom.devicesTableName}
+
+provider:
+  name: aws
+  runtime: go1.x
+  stage: api
+  region: ap-southeast-2
+  environment:
+    DEVICES_TABLE: ${self:custom.devicesTableName}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+      Resource:
+        - ${self:custom.devicesTableArn}
+
+package:
+  individually: true
+  exclude:
+    - ./**
+
+functions:
+  DeviceApi:
+    handler: main
+    package:
+      include:
+        - ./build/main
+      artifact: ./build/main.zip
+    events:
+      - http:
+          path: devices/
+          method: POST
+          cors: true
+      - http:
+          path: devices/{id}
+          method: GET
+          cors: true
+
+resources:
+  Resources:
+    DevicesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.devicesTableName}
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
